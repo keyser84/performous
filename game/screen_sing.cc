@@ -111,7 +111,7 @@ void ScreenSing::setupVocals() {
 			selectedTracks.push_back(vocal);
 			shownTracks.insert(vocal);
 		}
-		if (shownTracks.size() > 2) throw std::runtime_error("Too many tracks chosen. Only two vocal tracks can be used simultaneously.");
+		//if (shownTracks.size() > 2) throw std::runtime_error("Too many tracks chosen. Only two vocal tracks can be used simultaneously.");
 		for (auto const& trk: shownTracks) m_layout_singer.push_back(new LayoutSinger(*trk, m_database, theme));
 		// Note: Engine maps tracks with analyzers 1:1. If user doesn't have mics, we still want to have singer layout enabled but without engine...
 		if (!analyzers.empty()) m_engine.reset(new Engine(m_audio, selectedTracks, m_database));
@@ -578,7 +578,7 @@ void ScreenSing::drawMenu() {
 	if (m_menu.empty()) return;
 	// Some helper vars
 	ThemeInstrumentMenu& th = *m_menuTheme;
-	auto cur = static_cast<MenuOptions::const_iterator>(&m_menu.current());
+	const auto cur = &m_menu.current();
 	double w = m_menu.dimensions.w();
 	const float txth = th.option_selected.h();
 	const float step = txth * 0.85f;
@@ -595,7 +595,8 @@ void ScreenSing::drawMenu() {
 	for (MenuOptions::const_iterator it = m_menu.begin(); it != m_menu.end(); ++it) {
 		// Pick the font object
 		SvgTxtTheme* txt = &th.option_selected;
-		if (cur != it) txt = &(th.getCachedOption(it->getName()));
+		if (cur != &*it)
+			txt = &(th.getCachedOption(it->getName()));
 		// Set dimensions and draw
 		txt->dimensions.middle(x).center(y);
 		txt->draw(it->getName());
@@ -697,7 +698,7 @@ void ScoreWindow::draw() {
 	for (Database::cur_scores_t::const_iterator p = m_database.scores.begin(); p != m_database.scores.end(); ++p, ++i) {
 		int score = p->score;
 		ColorTrans c(p->color);
-		double x = -0.12 + spacing * (0.5 + i - 0.5 * m_database.scores.size());
+		double x = spacing * (0.5 + i - 0.5 * m_database.scores.size());
 		m_scoreBar.dimensions.fixedWidth(0.09).middle(x).bottom(0.20);
 		m_scoreBar.draw(score / 10000.0);
 		m_score_text.render(boost::lexical_cast<std::string>(score));

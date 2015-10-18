@@ -3,6 +3,7 @@
 #include "config.hh"
 #include "configuration.hh"
 #include "execname.hh"
+
 #include <boost/filesystem/fstream.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <cstdlib>
@@ -225,11 +226,14 @@ fs::path findFile(fs::path const& filename) {
 }
 
 Paths listFiles(fs::path const& dir) {
-	if (dir.is_absolute()) throw std::logic_error("findFile expects a folder name without path.");
+	if (dir.is_absolute()) throw std::logic_error("listFiles expects a folder name without path.");
 	std::set<fs::path> found;  // Filenames already found
 	Paths files;  // Full paths of files found
 	for (fs::path path: getThemePaths()) {
-		for (fs::recursive_directory_iterator dirIt(path), dirEnd; dirIt != dirEnd; ++dirIt) {
+		fs::path subdir = path / dir;
+		if (!fs::is_directory(subdir))
+			continue;
+		for (fs::recursive_directory_iterator dirIt(subdir), dirEnd; dirIt != dirEnd; ++dirIt) {
 			fs::path name = dirIt->path().filename();  // FIXME: Extract full path from current folder, not just the filename
 			// If successfully inserted to "found", it wasn't found before, so add to paths.
 			if (found.insert(name).second) files.push_back(*dirIt);
@@ -259,17 +263,6 @@ Paths getPathsConfig(std::string const& confOption) {
 	for (auto const& str: config[confOption].sl()) {
 		ret.splice(ret.end(), cache.pathExpand(str));  // Add expanded paths to ret.
 	}
-	return ret;
-}
-
-BinaryBuffer readFile(fs::path const& path) {
-	BinaryBuffer ret;
-	fs::ifstream f(path, std::ios::binary);
-	f.seekg(0, std::ios::end);
-	ret.resize(f.tellg());
-	f.seekg(0);
-	f.read(reinterpret_cast<char*>(ret.data()), ret.size());
-	if (!f) throw std::runtime_error("File cannot be read: " + path.string());
 	return ret;
 }
 

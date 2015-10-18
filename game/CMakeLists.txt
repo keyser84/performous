@@ -1,46 +1,43 @@
 cmake_minimum_required(VERSION 2.6)
 
-file(GLOB SOURCE_FILES "*.cc")
-file(GLOB HEADER_FILES "*.hh" "libda/*.hpp")
+file(GLOB SOURCE_FILES "*.cc" "../common/image.cc")
+file(GLOB HEADER_FILES "*.hh" "../common/image.hh" "libda/*.hpp")
 
 if(WIN32)
-	if(ENABLE_VERSIONING)
-		set(COMMENTS)
-		string(REGEX MATCHALL "([^\\.,^$]+)(\\.|,|$)"  VERSIONING ${PROJECT_VERSION})
-		set(VERSIONS "MAJOR" "MINOR" "PATCH" "TWEAK")
-		foreach(s ${VERSIONING})
-			# We get the most-right number
-			string(REGEX REPLACE "[^0-9]+$" "" s ${s})#removes most right part non-numeric (like .)
-			# Now we have a string in format <numbers-letters..........numbers>
-			# Take last numbers (if there are)
-			# If string not empty, there are some numbers in right of string
-			# otherwise, set a 0, to be sure that there's a number
-			if(s STREQUAL "")
-				set(s "0")
-			endif()
-			string(REGEX MATCH "[0-9]*$" s ${s})
+	# We want to support all these version numbers:
+	# 1.0 1.0.1 1.0+ 1.0.1+ 1.0-2-g123abcd 1.0.1-5-g123abcd
+	# We use the 2-3 digits of the version as MAJOR.MINOR.PATCH
+	# and the git patch number as TWEAK
+	string(REGEX REPLACE "\\." ";"  VERSIONING ${PROJECT_VERSION})
+	list(GET VERSIONING -1 LAST_ENTRY)
+	list(REMOVE_AT VERSIONING -1)
+	string(REGEX REPLACE "^([0-9]+)(.*)$" "\\1;\\2"  LAST_ENTRIES ${LAST_ENTRY})
+	list(GET LAST_ENTRIES 0 LAST_ENTRY_NUM)
+	list(GET LAST_ENTRIES 1 LAST_ENTRY_ADD)
+	list(APPEND VERSIONING ${LAST_ENTRY_NUM})
 
-			foreach(v ${VERSIONS})
-				if(NOT VERSION_${v}_DONE)
-					set(VERSION_${v}_DONE 1)
-					set(VERSION_${v} "${s}")
-					break()
-				endif()
-			endforeach()
-		endforeach()
+	list(GET VERSIONING 0 VERSION_MAJOR)
+	list(LENGTH VERSIONING VERSION_LENGTH)
+	if(VERSION_LENGTH GREATER 1)
+		list(GET VERSIONING 1 VERSION_MINOR)
+	endif()
+	if(VERSION_LENGTH GREATER 2)
+		list(GET VERSIONING 2 VERSION_PATCH)
+	endif()
 
-		foreach(v ${VERSIONS})
-			if(NOT VERSION_${v}_DONE OR VERSION_${v} STREQUAL "") #For the substitution did before, in VERSION_${v} we have or a empty string (if all letters) or a number
-				set(VERSION_${v} "0")
-			endif()
-		endforeach()
-		message(STATUS "Setting .exe version: ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}.${VERSION_TWEAK}")
-	else(ENABLE_VERSIONING)
-		set(COMMENTS "//")
-	endif(ENABLE_VERSIONING)
+	string(REGEX REPLACE "^-([0-9]+)-.*$" "\\1" VERSION_TWEAK "${LAST_ENTRY_ADD}")
+
+	set(VERSIONS "MAJOR" "MINOR" "PATCH" "TWEAK")
+	foreach(v ${VERSIONS})
+		if(NOT VERSION_${v} MATCHES "^[0-9]+$")
+			set(VERSION_${v} "0")
+		endif()
+	endforeach()
+	message(STATUS "Setting .exe version: ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}.${VERSION_TWEAK}")
+
 	set(RESOURCE_FILES "${CMAKE_BINARY_DIR}/performous.rc")
-
 	configure_file("../win32/performous.cmake.rc" "${RESOURCE_FILES}")
+
 	if(MINGW)
 		# According to MinGW tools, we need to compile the rc file, and then link it into projects:
 		# windres foo.rc foores.o
@@ -67,8 +64,14 @@ find_package(Boost 1.36 REQUIRED COMPONENTS thread date_time program_options reg
 include_directories(${Boost_INCLUDE_DIRS})
 list(APPEND LIBS ${Boost_LIBRARIES})
 
+# LibEpoxy < 1.2 crashes with binary drivers (nvidia & fglrx) when creating shaders
+# (see https://github.com/anholt/libepoxy/issues/23 for the exact problem)
+find_package(LibEpoxy 1.2 REQUIRED)
+include_directories(${LibEpoxy_INCLUDE_DIRS})
+list(APPEND LIBS ${LibEpoxy_LIBRARIES})
+
 # Find all the libs that don't require extra parameters
-foreach(lib ${OUR_LIBS} SDL2 PangoCairo LibRSVG LibXML++ GLEW AVFormat AVResample SWScale OpenGL Z Jpeg Png PortAudio Fontconfig)
+foreach(lib ${OUR_LIBS} SDL2 PangoCairo LibRSVG LibXML++ AVFormat AVResample SWScale Z Jpeg Png PortAudio Fontconfig)
 	find_package(${lib} REQUIRED)
 	message(STATUS "${lib} includes: ${${lib}_INCLUDE_DIRS}")
 	include_directories(${${lib}_INCLUDE_DIRS})
@@ -136,7 +139,7 @@ if(WIN32)
 			OUTPUT_VARIABLE MXE_HACK_STRING
 		)
 		set(CMAKE_CXX_LINK_EXECUTABLE ${CMAKE_CXX_LINK_EXECUTABLE}${MXE_HACK_STRING})
-		add_definitions(-DBOOST_THREAD_USE_LIB -DGLEW_STATIC)
+		add_definitions(-DBOOST_THREAD_USE_LIB)
 	endif()
 	set(BIN_INSTALL .)  # Straight to Program Files/Performous with no bin subfolder.
 	set(SUBSYSTEM_WIN32 WIN32)
